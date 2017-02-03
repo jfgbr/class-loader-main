@@ -2,6 +2,7 @@ package com.jgalante.classloader;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
@@ -10,38 +11,62 @@ import java.nio.file.Paths;
 import java.util.HashSet;
 import java.util.Set;
 
-public class MyClassLoader {
+import com.jgalante.exception.ClassLoaderException;
 
-	private Set<InterfaceClass> instances;
+
+public class MyClassLoader<T> {
+
+	private static final String JAR = ".jar";
+	
+	private static final String LIB = "lib";
+	
+	private Set<T> instances;
 
 	public MyClassLoader() {
 		instances = new HashSet<>();
-		dir(Paths.get("lib"));
 	}
 
-	public void dir(Path path) {
+	public void load(String commonClass) {
+		loadPath(Paths.get(LIB), commonClass);
+	}
+
+	public void load(String path, String commonClass) {
+		loadPath(Paths.get(path), commonClass);
+	}
+
+	protected void loadPath(Path path, String commonClass) {
 		try {
 			Files.walk(path, 1).forEach(filePath -> {
-				try {
-					if (filePath.toString().toLowerCase().endsWith(".jar")) {
-						File file = filePath.toFile();
-						URLClassLoader urlloader = URLClassLoader.newInstance(new URL[] { file.toURI().toURL() });
-						Class<?> clazz = urlloader.loadClass("com.jgalante.classloader.ClassA");
-						InterfaceClass interfaceClass = (InterfaceClass) clazz.newInstance();
-						instances.add(interfaceClass);
-					}
+				if (filePath.toString().toLowerCase().endsWith(JAR)) {
+					File file = filePath.toFile();
+					T instance;
+					try {
+						instance = createInstance(commonClass, file);
 
-				} catch (ClassNotFoundException | SecurityException | InstantiationException | IllegalAccessException
-						| IllegalArgumentException | IOException e) {
-					e.printStackTrace();
+						if (instance != null) {
+							instances.add(instance);
+						}
+					} catch (MalformedURLException | ClassNotFoundException | InstantiationException
+							| IllegalAccessException e) {
+						throw new ClassLoaderException(e);
+					}
 				}
+
 			});
 		} catch (IOException e) {
-			e.printStackTrace();
+			throw new ClassLoaderException(e);
 		}
 	}
 
-	public Set<InterfaceClass> getInstances() {
+	@SuppressWarnings("unchecked")
+	protected T createInstance(String commonClass, File file)
+			throws MalformedURLException, ClassNotFoundException, InstantiationException, IllegalAccessException {
+		URLClassLoader urlloader = URLClassLoader.newInstance(new URL[] { file.toURI().toURL() });
+		Class<?> clazz = urlloader.loadClass(commonClass);
+		return (T) clazz.newInstance();
+	}
+
+	public Set<T> getInstances() {
 		return instances;
 	}
 
